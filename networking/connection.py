@@ -1,4 +1,5 @@
-import ssl, socket, lagcerts
+import ssl, socket
+import networking.lagcerts as lagcerts
 from datetime import datetime, timezone
 from OpenSSL import crypto
 from cryptography import x509
@@ -16,20 +17,43 @@ class Response:
 
 
 
+#TODO: open connection to the host, and ask for the particular page when making the request
+#      e.g. open socket to host 'gemini.circumlunar.space'
+#      but when making the request, request 'gemini://gemini.circumlunar.space/'
 class Connection:
+
     def __init__(self, URL, cert=None):
         # make connection
         context = ssl.SSLContext()
-        connection = socket.create_connection((URL, GEMINI_PORT))
-        self.host = URL
+        self.host, self.query = self._parse_query(URL)
+        connection = socket.create_connection((self.host, GEMINI_PORT))
         self.sock = context.wrap_socket(connection)
         der_cert = self.sock.getpeercert(True)
         pem_cert = ssl.DER_cert_to_PEM_cert(der_cert)
+
 
         if not lagcerts.valid_cert(pem_cert, URL):
             self.maybe_unsafe = True
         else:
             self.maybe_unsafe = False
+
+
+
+    def _parse_query(self, query):
+        GEM_LEN = 9
+        if "gemini://" not in query:
+            query = "gemini://" + query
+
+        page = query[GEM_LEN:].find("/")
+
+        if page == -1:
+            host = query[GEM_LEN:]
+            query = query + "/"
+        else:
+            host = query[GEM_LEN:page+GEM_LEN]
+
+        return (host, query)
+
 
 
     def need_to_prompt(self):
@@ -38,11 +62,7 @@ class Connection:
 
 
     def send_request(self, cert_needed = False):
-        if "gemini://" not in self.host:
-            request = ("gemini://"+self.host+'/\r\n').encode('utf8')
-        else:
-            request = (self.host+'/\r\n').encode('utf8')
-
+        request = (self.query + '\r\n').encode('utf8')
         self.sock.send(request)
 
     def receive_response(self):
@@ -57,7 +77,9 @@ class Connection:
             buf = self.sock.recv(PACKET_SIZE)
             body += buf
 
+        self.sock.close()
         return Response(headers[0:2], headers[3:len(headers)-2], body)
+
 
     def close_connection(self):
         self.sock.close()

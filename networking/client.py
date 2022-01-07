@@ -1,5 +1,6 @@
-import connection, lagcerts
-from connection import Connection, Response
+from networking import lagcerts
+from networking.connection import Connection, Response
+
 class Client:
 
     cur_page = ""
