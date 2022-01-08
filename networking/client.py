@@ -31,4 +31,5 @@ class Client:
         page_conn.send_request()
         #print("Receiving response")
         response = page_conn.receive_response()
+        page_conn.close_connection()
         return response

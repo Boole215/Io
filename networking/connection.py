@@ -1,6 +1,8 @@
-import ssl, socket, select
+import ssl, socket, select, logging
 import networking.lagcerts as lagcerts
+
 from networking.errors import InvalidHostError
+from networking.log import netlog
 
 from datetime import datetime, timezone
 from OpenSSL import crypto
@@ -22,7 +24,7 @@ class Response:
 #      e.g. open socket to host 'gemini.circumlunar.space'
 #      but when making the request, request 'gemini://gemini.circumlunar.space/'
 class Connection:
-
+    _logger = logging.getLogger()
 
     def __init__(self, URL, cert=None):
         # make connection
@@ -74,20 +76,21 @@ class Connection:
 
     def receive_response(self):
         PACKET_SIZE = 2048
-        headers = self.sock.recv(PACKET_SIZE)
-        #print(headers)
-        #print("I am in receive_response")
-        body = b''
-        buf = b'ohnoo'
 
         ready = select.select([self.sock], [], [], 10)
         if ready[0]:
+            headers = self.sock.recv(PACKET_SIZE)
+            body = b''
+            buf = b'ohnoo'
+
             while len(buf) != 0:
                 buf = self.sock.recv(PACKET_SIZE)
                 body += buf
 
-        self.sock.close()
-        return Response(headers[0:2], headers[3:len(headers)-2], body)
+            return Response(headers[0:2], headers[3:len(headers)-2], body)
+        netlog.debug("No answer received, ")
+        self.close_connection()
+        raise InvalidHostError
 
 
     def close_connection(self):
