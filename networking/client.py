@@ -1,10 +1,10 @@
 from networking import lagcerts
 from networking.connection import Connection, Response
+from networking.errors import InvalidHostError
+
+invalid_host_page = b'# Host not found\nPlease make sure the address is correct.\n'
 
 class Client:
-
-    cur_page = ""
-    tabs = []
 
     def __init__(self):
         # generate a client cert just in case
@@ -20,16 +20,22 @@ class Client:
             # tell user to use right response
             return 0
 
+    def _make_dummy_response(self, body):
+        return Response("20", b"gemini/text", body)
 
     def get_page(self, URL, cert=None):
-        page_conn = Connection(URL)
-        #print("Conneciton created")
-        if page_conn.need_to_prompt():
-            if input("Unsafe maybe, continue? y/n: ") != 'y':
-                return 1
+        try:
+            page_conn = Connection(URL)
 
-        page_conn.send_request()
-        #print("Receiving response")
-        response = page_conn.receive_response()
-        page_conn.close_connection()
-        return response
+            if page_conn.need_to_prompt():
+                if input("Unsafe maybe, continue? y/n: ") != 'y':
+                    return 1
+
+            page_conn.send_request()
+            #print("Receiving response")
+            response = page_conn.receive_response()
+            page_conn.close_connection()
+            return response
+
+        except InvalidHostError:
+            return self._make_dummy_response(invalid_host_page)

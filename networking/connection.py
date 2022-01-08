@@ -15,7 +15,7 @@ GEMINI_PORT = 1965
 
 @dataclass
 class Response:
-    code: int
+    code: str
     MIME: str
     body: bytes
 
@@ -24,7 +24,6 @@ class Response:
 #      e.g. open socket to host 'gemini.circumlunar.space'
 #      but when making the request, request 'gemini://gemini.circumlunar.space/'
 class Connection:
-    _logger = logging.getLogger()
 
     def __init__(self, URL, cert=None):
         # make connection
@@ -32,8 +31,10 @@ class Connection:
         self.host, self.query = self._parse_query(URL)
 
         try:
-            connection = socket.create_connection((self.host, GEMINI_PORT), 20)
+            netlog.debug("Attempting to connect to {}".format(self.host))
+            connection = socket.create_connection((self.host, GEMINI_PORT), 10)
         except socket.error:
+            netlog.debug("Invalid host, raising exception")
             raise InvalidHostError
 
         self.sock = context.wrap_socket(connection)
