@@ -26,9 +26,14 @@ from textual.keys import Keys
 from .widgets.status_bar import StatusBar
 from .widgets.search_bar import SearchBar
 from .widgets.gem_page import GemPage
+
 from networking.client import Client
+from networking.errors import InvalidHostError
+
 
 start_page = b'# Welcome Page\nWelcomeeee, here are some useful keybinds for you:\n* C-Q - quit\n* C-S - Toggles the search bar (click the search bar to type in it, and onto the document body to stop)\n* l - cycles through links present on the current page\nThose are all the binds we have for now,\nRemember what they say:\n> Poop.\n=> gemini://gemini.circumlunar.space/ sample link'
+
+invalid_host_page = b'# Host not found\nPlease make sure that address is correct.\n'
 
 app_client = Client()
 
@@ -48,7 +53,11 @@ class LagannView(App):
 
 
     async def on_key(self, key: events.Key) -> None:
-        if self.show_search_bar and self.search_bar.has_focus:
+        if key.key == Keys.ControlS:
+            await self.toggle_search_bar()
+        elif key.key == Keys.ControlQ:
+            quit()
+        elif self.show_search_bar and self.search_bar.has_focus:
             query_len = len(self.search_bar.query)
             if key.key in string.printable:
                 await self.search_bar.push_char(key.key)
@@ -61,15 +70,9 @@ class LagannView(App):
                 if not "gemini://" in self.search_bar.query:
                     query = "gemini://" + query
                     await self.search_bar.set_title(query)
+                await self.toggle_search_bar()
                 await self.set_page(await self.dispatch_search(query), query)
-                #new_page = await self.dispatch_search(self.search_bar.query);
-                #self.panic(type(new_page), new_page)
-                #self.center_page = GemPage(new_page)
-                #await self.gem_page.update(self.center_page)
-        elif key.key == Keys.ControlQ:
-            quit()
-        elif key.key == Keys.ControlS:
-            await self.toggle_search_bar()
+
         elif key.key == "l":
             #TODO: Let Keys.ShiftL cycle backwards
             if not self.center_page.cycling:
@@ -91,7 +94,7 @@ class LagannView(App):
 
             await self.set_page(await self.dispatch_search(new_url), new_url)
             await self.search_bar.set_title(new_url)
-            return
+        return
 
 
 
@@ -107,7 +110,11 @@ class LagannView(App):
 
     async def dispatch_search(self, search_url):
         global app_client
-        result = app_client.get_page(search_url)
+        try:
+            result = app_client.get_page(search_url)
+        except InvalidHostError:
+            return invalid_host_page
+
         return result.body
 
     async def set_page(self, page, url):

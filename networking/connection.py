@@ -1,5 +1,9 @@
-import ssl, socket
+import ssl, socket, select, logging
 import networking.lagcerts as lagcerts
+
+from networking.errors import InvalidHostError
+from networking.log import netlog
+
 from datetime import datetime, timezone
 from OpenSSL import crypto
 from cryptography import x509
@@ -16,17 +20,22 @@ class Response:
     body: bytes
 
 
-
 #TODO: open connection to the host, and ask for the particular page when making the request
 #      e.g. open socket to host 'gemini.circumlunar.space'
 #      but when making the request, request 'gemini://gemini.circumlunar.space/'
 class Connection:
+    _logger = logging.getLogger()
 
     def __init__(self, URL, cert=None):
         # make connection
         context = ssl.SSLContext()
         self.host, self.query = self._parse_query(URL)
-        connection = socket.create_connection((self.host, GEMINI_PORT))
+
+        try:
+            connection = socket.create_connection((self.host, GEMINI_PORT), 20)
+        except socket.error:
+            raise InvalidHostError
+
         self.sock = context.wrap_socket(connection)
         der_cert = self.sock.getpeercert(True)
         pem_cert = ssl.DER_cert_to_PEM_cert(der_cert)
@@ -67,18 +76,21 @@ class Connection:
 
     def receive_response(self):
         PACKET_SIZE = 2048
-        headers = self.sock.recv(PACKET_SIZE)
-        print(headers)
-        print("I am in receive_response")
-        body = b''
-        buf = b'ohnoo'
 
-        while len(buf) != 0:
-            buf = self.sock.recv(PACKET_SIZE)
-            body += buf
+        ready = select.select([self.sock], [], [], 10)
+        if ready[0]:
+            headers = self.sock.recv(PACKET_SIZE)
+            body = b''
+            buf = b'ohnoo'
 
-        self.sock.close()
-        return Response(headers[0:2], headers[3:len(headers)-2], body)
+            while len(buf) != 0:
+                buf = self.sock.recv(PACKET_SIZE)
+                body += buf
+
+            return Response(headers[0:2], headers[3:len(headers)-2], body)
+        netlog.debug("No answer received, ")
+        self.close_connection()
+        raise InvalidHostError
 
 
     def close_connection(self):
