@@ -76,6 +76,7 @@ class LagannView(App):
         elif key.key == "l":
             #TODO: Let Keys.ShiftL cycle backwards
             if not self.center_page.cycling:
+                self.log("Toggling link cycle")
                 self.center_page.toggle_cycle_links()
             else:
                 self.center_page.cycle_link()

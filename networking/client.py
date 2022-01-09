@@ -99,7 +99,7 @@ class Client:
             else:
                 parsed_lines.append((pl[0], pl[1]))
 
-                idx += 1
+            idx += 1
 
         #return raw_gem.decode().split("\n")
         #return ret_str
