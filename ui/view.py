@@ -28,7 +28,8 @@ from .widgets.search_bar import SearchBar
 from .widgets.gem_page import GemPage
 
 from networking.client import Client
-from networking.client import DisplayForm
+
+start_page = b'# Welcome Page\nWelcomeeee, here are some useful keybinds for you:\n* C-Q - quit\n* C-S - Toggles the search bar (click the search bar to type in it, and onto the document body to stop)\n* l - cycles through links present on the current page\nThose are all the binds we have for now,\nRemember what they say:\n> Poop.\n=> gemini://gemini.circumlunar.space/ sample link'
 
 
 
@@ -69,9 +70,7 @@ class LagannView(App):
                 #    await self.search_bar.set_title(query)
                 await self.search_bar.set_title(query)
                 await self.toggle_search_bar()
-                search_result = await self.dispatch_search(query)
-                await self.set_page(search_result, query)
-
+                await self.set_page(await self.dispatch_search(query), query)
 
         elif key.key == "l":
             #TODO: Let Keys.ShiftL cycle backwards
@@ -108,29 +107,24 @@ class LagannView(App):
     async def dispatch_search(self, search_url):
         global app_client
         result = app_client.get_page(search_url)
-        return result
+        return result.body
 
-    async def set_page(self, result, url):
-        self.center_page = GemPage(result.media_type, result.content, url)
+    async def set_page(self, page, url):
+        self.center_page = GemPage(page, url)
         await self.gem_page.update(self.center_page)
 
     async def on_mount(self, event: events.Mount) -> None:
 
-        # Initialize the start page
-        start_page = app_client.make_start_page()
-        self.center_page = GemPage(start_page.media_type, start_page.content, "home://")
+        self.footer = StatusBar()
+        self.footer.set_status_text(self.statuses)
+
+        self.center_page = GemPage(start_page, "~Blank~")
         self.gem_page = ScrollView(self.center_page)
 
-        # Initialize the search bar
         self.search_bar = SearchBar()
         self.search_bar.layout_offset_x = 0
         self.search_bar.layout_offset_y = -20
 
-        # Initialize the status bar
-        self.footer = StatusBar()
-        self.footer.set_status_text(self.statuses)
-
-        # Initialize the viewports
         await self.view.dock(self.footer, edge="bottom", z = 1)
         await self.view.dock(self.search_bar, edge="top", size = 3, z=1)
 

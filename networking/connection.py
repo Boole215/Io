@@ -1,7 +1,7 @@
 import ssl, socket, select, logging
 import networking.lagcerts as lagcerts
 
-from networking.errors import InvalidHostError, MetaOverflowError
+from networking.errors import InvalidHostError
 from networking.log import netlog
 
 from datetime import datetime, timezone
@@ -73,7 +73,6 @@ class Connection:
 
     def send_request(self, cert_needed = False):
         request = (self.query + '\r\n').encode('utf8')
-        netlog.debug("sending request {}".format(request))
         self.sock.send(request)
 
     def receive_response(self):
@@ -82,8 +81,6 @@ class Connection:
         ready = select.select([self.sock], [], [], 10)
         if ready[0]:
             headers = self.sock.recv(PACKET_SIZE)
-            if len(headers) > 1024 + 5:
-                raise MetaOverflowError
             body = b''
             buf = b'ohnoo'
 
@@ -91,10 +88,7 @@ class Connection:
                 buf = self.sock.recv(PACKET_SIZE)
                 body += buf
 
-
             return Response(headers[0:2], headers[3:len(headers)-2], body)
-
-
         netlog.debug("No answer received, ")
         self.close_connection()
         raise InvalidHostError

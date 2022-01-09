@@ -8,32 +8,18 @@ from textual.reactive import Reactive
 
 class GemPage(Widget):
     highlight_idx = Reactive(-1)
-    link_indices = []
     cycling = Reactive(False)
-    links = []
-
-    body = Text()
-    doc_type = ""
-
+    link_indices = Reactive([])
     url = ""
+    document = Reactive("")
 
-    def __init__(self, doc_type, content, url):
+
+    def __init__(self, page, url):
         super().__init__()
         self.url = url
+        self.link_indices, self.links, self.document = self._parse_page(page)
 
-        self.doc_type = doc_type
-        #self.log(content)
-        if doc_type == "text/gemini":
-            self.link_indices = content[0]
-            self.links = content[1]
-            self.body = content[2]
-        else:
-            self.body = content
-
-
-
-    def _format_parsed_gem(self, gem_page):
-        self.log("parsed_gem: {}".format(gem_page))
+    def prettify_parsed_gem(self, gem_page):
         pretty_page = Text("")
         idx = 0
         hover_idx = self.link_indices[self.highlight_idx] if self.cycling else -1
@@ -101,15 +87,60 @@ class GemPage(Widget):
     def get_highlighted_link(self):
         return self.links[self.highlight_idx]
 
-    def _format_body(self):
-        if self.doc_type == "text/gemini":
-            return self._format_parsed_gem(self.body)
-        elif self.doc_type == "text/plain":
-            return self.body
+
+    def _parse_line(self, line):
+        text_parts = [x for x in line.split(" ") if x != " " and x != '']
+        if not text_parts:
+            return ("\n", "nl")
+
+        if text_parts[0] == "=>":
+            text_parts = [x if '\t' not in x else x.split('\t') for x in text_parts]
+            if type(text_parts[1]) != str:
+                text_parts = [text_parts[0]] + text_parts[1] + text_parts[2:]
+            return ((text_parts[1], " ".join(text_parts[2:])), 'link')
+
+        elif text_parts[0] == ">":
+            return (" ".join(text_parts[1:]), "quote")
+        elif text_parts[0] == "*":
+            return(line, "list")
+        elif len([x for x in text_parts[0] if x != "#"]) == 0:
+            if text_parts[0] == "#":
+                return (line, "h1")
+            elif text_parts[0] == "##":
+                return (line, "h2")
+            elif text_parts[0] == "###":
+                return (line, "h3")
+        else:
+            return (line, "plain")
+
+    def _parse_page(self, raw_gem):
+        lines = raw_gem.decode().split('\n')
+        parsed_lines = []
+        ret_str = ""
+        link_indices = []
+        links = []
+        idx = 0
+
+        for line in lines:
+            ret_str += line
+
+        for line in lines:
+            pl = self._parse_line(line)
+            if pl[1] == "link":
+                link_indices.append(idx)
+                links.append(pl[0][0])
+                parsed_lines.append((pl[0][1], pl[1]))
+            else:
+                parsed_lines.append((pl[0], pl[1]))
+
+                idx += 1
+
+
+        #return raw_gem.decode().split("\n")
+        #return ret_str
+        return (link_indices, links, parsed_lines)
 
     def render(self) -> Panel:
-        self.log(self.body)
-        formatted_body = self._format_body()
-        self.log(self.log(formatted_body))
-        return Panel(formatted_body,
+        #self.log(self.document)
+        return Panel(self.prettify_parsed_gem(self.document),
                      box=box.MINIMAL)
