@@ -5,6 +5,8 @@ from cryptography.hazmat.primitives import hashes
 from dataclasses import dataclass
 from socket import gethostname
 
+from networking.log import netlog
+
 @dataclass
 class host_entry:
     fingerprint: bytes
@@ -18,24 +20,35 @@ def valid_cert(pem_cert, URL):
     # Get the certificate into a parseable medium and fingerprint
     cert = x509.load_pem_x509_certificate(str.encode(pem_cert), default_backend())
     fingerprint = cert.fingerprint(hashes.SHA256())
+    netlog.debug("Current trusted_certs: {}".format(trusted_certs))
+    netlog.debug("Validating cert for: {}".format(URL))
+    netlog.debug("Fingerprint: {}".format(fingerprint))
 
     if not URL in trusted_certs:
         trusted_certs[URL] = (fingerprint, (cert.not_valid_before, cert.not_valid_after))
         # Connection may proceed normally
         return True
 
+
     elif URL in trusted_certs and trusted_certs[URL][0] != fingerprint:
         # Cert is different, check if the cert is still valid
         cur_time = datetime.now(tz=timezone.utc)
+        netlog.debug("Current time: {}".format(cur_time))
         valid_range = trusted_certs[URL][1]
+        netlog.debug("Valid times for stored cert: {}".format(valid_range))
         if valid_range[0] <= cur_time and cur_time <= valid_range[1]:
             # Original cert is still valid, warn user and ask if they'd like to proceed
             return False
 
         else:
+            netlog.log("Original cert is no longer valid")
             # original cert is no longer valid, accept the new cert
             trusted_certs[URL] = host_entry(fingerprint, (cert.not_valid_before, cert.not_valid_after))
             return True
+
+    else:
+        netlog.log("Matching fingerprint present for URL")
+        return True
 
 def generate_client_cert():
     # Generate Key Pair
