@@ -59,9 +59,18 @@ class Client:
             return ("\n", "nl")
 
         if text_parts[0] == "=>":
-            text_parts = [x if '\t' not in x else x.split('\t') for x in text_parts]
+
+            if '\t' in text_parts[1]:
+                text_parts[1] = text_parts[1].split('\t')
+                text_parts[1] = [x for x in text_parts[1] if x != '']
+
+            netlog.debug(text_parts[1])
+
             if type(text_parts[1]) != str:
                 text_parts = [text_parts[0]] + text_parts[1] + text_parts[2:]
+
+            netlog.debug("text_parts: {}".format(text_parts))
+
             return ((text_parts[1], " ".join(text_parts[2:])), 'link')
 
         elif text_parts[0] == ">":
