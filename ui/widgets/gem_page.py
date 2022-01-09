@@ -33,11 +33,11 @@ class GemPage(Widget):
 
 
     def _format_parsed_gem(self, gem_page):
-        self.log("parsed_gem: {}".format(gem_page))
+        #self.log("parsed_gem: {}".format(gem_page))
         pretty_page = Text("")
         idx = 0
-        hover_idx = self.link_indices[self.highlight_idx] if self.cycling else -1
-        #self.log("{} {} {}".format(self.cycling, self.highlight_idx, hover_idx))
+        hover_idx = self.get_highlighted()
+        self.log("Cycling?: {}\nLink #: {}\nLine number: {}".format(self.cycling, self.highlight_idx, hover_idx))
         for line in gem_page:
             if line[1] == 'h1':
                 pretty_page.append(line[0] + "\n", style = "bold bright_white")
@@ -87,13 +87,16 @@ class GemPage(Widget):
 
     def cycle_link(self) -> None:
         #self.log("IDX INCREMENTED {}({}) -> {}({})".format(self.highlight_idx, self.link_indices[old], self.highlight_idx, self.link_indices[new]))
-        self.highlight_idx = self.highlight_idx+1
+        self.highlight_idx = self.highlight_idx + 1
+        self.log("New idx: {}".format(self.highlight_idx))
+        self.log("Reset idx: {}".format(len(self.link_indices)))
         if self.highlight_idx == len(self.link_indices):
             self.highlight_idx = -1
             self.cycling = False
 
     def get_highlighted(self):
-        if(self.cycling):
+        if self.cycling:
+            self.log("Link Indices: {}".format(self.link_indices))
             return self.link_indices[self.highlight_idx]
         else:
             return -1
@@ -108,8 +111,8 @@ class GemPage(Widget):
             return self.body
 
     def render(self) -> Panel:
-        self.log(self.body)
+        #self.log(self.body)
         formatted_body = self._format_body()
-        self.log(self.log(formatted_body))
+        #self.log(self.log(formatted_body))
         return Panel(formatted_body,
                      box=box.MINIMAL)
