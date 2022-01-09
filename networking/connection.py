@@ -42,7 +42,7 @@ class Connection:
         pem_cert = ssl.DER_cert_to_PEM_cert(der_cert)
 
 
-        if not lagcerts.valid_cert(pem_cert, URL):
+        if not lagcerts.valid_cert(pem_cert, self.host):
             self.maybe_unsafe = True
         else:
             self.maybe_unsafe = False

@@ -12,6 +12,8 @@ class DisplayForm:
     content: str
     properties: str
 
+from networking.log import netlog
+
 invalid_host_page = b'# Host not found\nPlease make sure the address is correct.\n'
 
 start_page = b'# Welcome Page\nWelcomeeee, here are some useful keybinds for you:\n* C-Q - quit\n* C-S - Toggles the search bar (click the search bar to type in it, and onto the document body to stop)\n* l - cycles through links present on the current page\nThose are all the binds we have for now,\nRemember what they say:\n> Poop.\n=> gemini://gemini.circumlunar.space/ sample link'
@@ -42,14 +44,7 @@ class Client:
 
 
     def prompt_for_safety():
-        # prompt user using ncurses
-        if user_in == "Y" or user_in == "y":
-            return 1
-        elif user_in == "N" or user_in == "n":
-            return 0
-        else:
-            # tell user to use right response
-            return 0
+        return 0
 
     def make_start_page(self):
         return self._make_placeholder(start_page)
@@ -166,8 +161,8 @@ class Client:
             return self._make_placeholder(invalid_host_page)
 
         if page_conn.need_to_prompt():
-            if input("Unsafe maybe, continue? y/n: ") != 'y':
-                return 1
+            netlog.debug("Unsafe")
+
 
         page_conn.send_request()
         #print("Receiving response")
