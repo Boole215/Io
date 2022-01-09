@@ -47,7 +47,6 @@ def valid_cert(pem_cert, URL):
             return True
 
     else:
-        netlog.log("Matching fingerprint present for URL")
         return True
 
 def generate_client_cert():

@@ -89,6 +89,9 @@ class LagannView(App):
             self.gem_page.scroll_to_center(highlight_idx)
         elif key.key == Keys.Enter and self.center_page.cycling:
             new_url = self.center_page.get_highlighted_link()
+            if not "gemini://" in new_url:
+                # It is a relative link, plop it onto the end of the URL in current_page
+                new_url = self.center_page.url + new_url
 
             await self.set_page(await self.dispatch_search(new_url), new_url)
             await self.search_bar.set_title(new_url)
