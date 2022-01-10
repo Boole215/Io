@@ -21,12 +21,19 @@ class GemPage(Widget):
         super().__init__()
         self.url = url
 
+        self.log("Initializing GemPage for: {}".format(url))
+
         self.doc_type = doc_type
-        #self.log(content)
+
+        self.log("doctype: {}".format(doc_type))
+
         if doc_type == "text/gemini":
+            self.log("Setting gem information")
             self.link_indices = content[0]
             self.links = content[1]
             self.body = content[2]
+            self.log("Gem information set")
+
         else:
             self.body = content
 
@@ -111,8 +118,9 @@ class GemPage(Widget):
             return self.body
 
     def render(self) -> Panel:
-        #self.log(self.body)
+        self.log("Formatting body for {}".format(self.url))
         formatted_body = self._format_body()
-        #self.log(self.log(formatted_body))
+        self.log("Body successfully formatted")
+        #self.log("Formatted body: {}".format(formatted_body))
         return Panel(formatted_body,
                      box=box.MINIMAL)
