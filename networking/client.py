@@ -38,6 +38,8 @@ status_6x_cert_req = b"# Client certificate required, retrying..."
 
 class Client:
 
+    ignore_gem_rules = False
+
     def __init__(self):
         # generate a client cert just in case
         self.cert = lagcerts.generate_client_cert()
@@ -50,11 +52,27 @@ class Client:
         return self._make_placeholder(start_page)
 
     def _make_placeholder(self, body):
-        return DisplayForm("text/gemini", self._parse_gmi(body.decode(encoding = "utf-8")), {"charset":"utf-8"})
+        return (DisplayForm("text/gemini", self._parse_gmi(body.decode(encoding = "utf-8")), {"charset":"utf-8"}),
+                "//CLIENT//")
 
 
     def _gmi_parse_line(self, line):
+
+
+        if line == "```" and not self.ignore_gem_rules:
+            self.ignore_gem_rules = True
+            return ('', "plain")
+
+        elif line == "```" and self.ignore_gem_rules:
+            self.ignore_gem_rules = False
+            return ('', "plain")
+
+
+        if self.ignore_gem_rules:
+            return (line, "plain")
+
         text_parts = [x for x in line.split(" ") if x != " " and x != '']
+
         if not text_parts:
             return ("\n", "nl")
 
@@ -64,12 +82,12 @@ class Client:
                 text_parts[1] = text_parts[1].split('\t')
                 text_parts[1] = [x for x in text_parts[1] if x != '']
 
-            netlog.debug(text_parts[1])
+            #netlog.debug(text_parts[1])
 
             if type(text_parts[1]) != str:
                 text_parts = [text_parts[0]] + text_parts[1] + text_parts[2:]
 
-            netlog.debug("text_parts: {}".format(text_parts))
+            #netlog.debug("text_parts: {}".format(text_parts))
 
             return ((text_parts[1], " ".join(text_parts[2:])), 'link')
 
@@ -122,7 +140,7 @@ class Client:
     def _parse_MIME(self, MIME):
         MIME = MIME.decode("utf-8")
         if "text" in MIME:
-            pieces = [x for x in MIME.split(';') if x != ' ']
+            pieces = [x.strip() for x in MIME.split(';') if x != ' ']
             text_type = pieces[0]
 
 
@@ -133,6 +151,9 @@ class Client:
                 prop_dict = {}
                 for prop in properties:
                     prop_dict[prop[0]] = prop[1]
+
+                if not "charset" in properties:
+                    prop_dict["charset"] = "utf-8"
 
                 return (text_type, prop_dict)
         else:
@@ -156,15 +177,104 @@ class Client:
         return (doc_type, content, properties)
 
 
+    def _parse_query(self, query, relative = None):
+        GEM_LEN = 9
+
+        #TODO: Do this using .find("://") rather than harcoding it only to work with gemini://
+
+        # Find the end of the protocol
+        netlog.debug("Searching for '://' in {}".format(query))
+        protocol_end = query.find("://")
+
+        if protocol_end == -1:
+            protocol_end = GEM_LEN
+            query = "gemini://" + query
+            netlog.debug("New query: {}".format(query))
+        else:
+            protocol_end += 3
+
+        netlog.debug("Protocol end: {}".format(protocol_end))
+        # split the query up into parts
+
+        protocol = query[0:protocol_end]
+        core = [x for x in query[protocol_end:].split('/') if x != '']
+        host = core[0]
+
+        netlog.debug("Protocol:{}\nCore:{}\nHost:{}".format(protocol, core, host))
+        netlog.debug("Relative:{}".format(relative))
+
+        # Account for: Files on the same directory
+        #              Prev directory
+        #              Deeper directory
+        #              Combo of Prev and Deeper
+        if relative != None:
+            idx = len(core)-1
+
+            relatives = [x for x in relative.split('/') if x != '']
+            netlog.debug("Core: {}".format(core))
+            netlog.debug("Relatives: {}".format(relatives))
 
 
+            #TODO: Maintaining an index for where we are in the list doesn't seem
+            #      like it's completely necessary, experiment on getting this to
+            #      work without it.
 
-    def get_page(self, URL, cert=None):
+            #TODO: Take into account that a directory may also have a '.' in it (maybe?)
+
+            for element in relatives:
+                # Move up the file hierarchy
+                if element == "..":
+                    if '.' in core[-1]:
+                        core.pop()
+                        idx -= 1
+
+                    core.pop()
+                    idx -= 1
+                    netlog.debug("Moving up hierarchy: {}".format(core))
+                elif element == ".":
+                    if "." in core[-1]:
+                        core.pop()
+                        idx -= 1
+                elif "." in element:
+                    if "." in core[-1]:
+                        core[idx] = element
+                    else:
+                        core.append(element)
+                    # media is in the same directory
+                    netlog.debug("{} is a file name right?".format(element))
+                else:
+                    # must be a directory name, just append it
+                    netlog.debug("{} is a directory name right?".format(element))
+                    core.append(element)
+                    idx += 1
+
+        # If the top level item isn't a file and it doesn't have a trailing slash,
+        # add it
+
+        netlog.debug("Core after relative parsing: {}".format(core))
+        if len(core) > 1:
+            if not '.' in core[-1] and core[-1].find('/') == -1:
+                netlog.debug("Adding a trailing slash")
+                core[-1] += '/'
+        else:
+            if core[0][-1] != '/':
+                netlog.debug("Adding a trailing slash")
+                core[-1] += '/'
+
+        query = protocol + '/'.join(core)
+
+        netlog.debug("Final query: {}".format(query))
+        return (host, query)
+
+
+    def get_page(self, URL, relative=None,cert=None):
         if URL == "start://":
             return self.get_start_page()
 
+        host, query = self._parse_query(URL, relative)
+        netlog.debug("Host: {}\n\tURL: {}".format(host, query))
         try:
-            page_conn = Connection(URL)
+            page_conn = Connection(host, query)
 
         except InvalidHostError:
             return self._make_placeholder(invalid_host_page)
@@ -184,14 +294,16 @@ class Client:
         page_conn.close_connection()
 
         netlog.debug("response from {}: {}".format(URL, response))
-        netlog.debug(response.code[0])
+        netlog.debug("Response code type: {}x".format(response.code[0:1]))
 
         if response.code[0:1] == b'2':
 
             parsed_mime = self._parse_response(response.MIME, response.body)
-            netlog.debug(parsed_mime)
-            return DisplayForm(parsed_mime[0], parsed_mime[1],
-                               parsed_mime[2])
+            netlog.debug("Parsed MIME: {}".format(parsed_mime))
+            netlog.debug("query to return: {}".format(query))
+            return (DisplayForm(parsed_mime[0], parsed_mime[1],
+                                parsed_mime[2]),
+                    query)
         elif response.code[0:1] == b'4':
             return self._make_placeholder(status_4x_perm_fail)
         elif response.code[0:1] == b'5':

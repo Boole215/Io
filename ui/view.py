@@ -62,15 +62,11 @@ class LagannView(App):
                 await self.search_bar.backspace()
             elif key.key == Keys.Enter:
                 query = self.search_bar.query
-                #if not "/" in query:
-                #    query = query + "/"
-                #if not "gemini://" in self.search_bar.query:
-                #    query = "gemini://" + query
-                #    await self.search_bar.set_title(query)
+
                 await self.search_bar.set_title(query)
                 await self.toggle_search_bar()
-                search_result = await self.dispatch_search(query)
-                await self.set_page(search_result, query)
+                content, new_url = await self.dispatch_search(query)
+                await self.set_page(content, new_url)
 
 
         elif key.key == "l":
@@ -89,12 +85,26 @@ class LagannView(App):
             self.gem_page.scroll_to_center(highlight_idx)
         elif key.key == Keys.Enter and self.center_page.cycling:
             new_url = self.center_page.get_highlighted_link()
+            self.log("New url: {}".format(new_url))
             if not "gemini://" in new_url:
                 # It is a relative link, plop it onto the end of the URL in current_page
-                new_url = self.center_page.url + new_url
+                current_url = self.center_page.url
+                self.log("Current displayed page's URL: {}".format(current_url))
+                content, new_url = await self.dispatch_search(current_url, new_url)
+                self.log("New New url: {}".format(new_url))
+                self.log("Content: {}".format(content))
+                await self.set_page(content, new_url)
+                self.log("Page has been set successfully")
+                await self.search_bar.set_title(new_url)
+                self.log("Search bar has been set successfully")
 
-            await self.set_page(await self.dispatch_search(new_url), new_url)
-            await self.search_bar.set_title(new_url)
+            else:
+                content, new_url = await self.dispatch_search(new_url)
+                await self.set_page(content, new_url)
+                self.log("Succesfully set page")
+                await self.search_bar.set_title(new_url)
+                self.log("Successfully set search bar")
+
         return
 
 
@@ -109,20 +119,21 @@ class LagannView(App):
     async def watch_show_search_bar(self, show_search_bar) -> None:
         self.animator.animate(self.search_bar, "layout_offset_y", 0 if show_search_bar else -20)
 
-    async def dispatch_search(self, search_url):
+    async def dispatch_search(self, search_url, relative=None):
         global app_client
-        result = app_client.get_page(search_url)
+        result = app_client.get_page(search_url, relative)
         return result
 
     async def set_page(self, result, url):
+        self.log("Setting page to {}".format(result))
         self.center_page = GemPage(result.media_type, result.content, url)
         await self.gem_page.update(self.center_page)
 
     async def on_mount(self, event: events.Mount) -> None:
 
         # Initialize the start page
-        start_page = app_client.make_start_page()
-        self.center_page = GemPage(start_page.media_type, start_page.content, "home://")
+        start_page, URL = app_client.make_start_page()
+        self.center_page = GemPage(start_page.media_type, start_page.content, URL)
         self.gem_page = ScrollView(self.center_page)
 
         # Initialize the search bar
