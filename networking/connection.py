@@ -25,10 +25,11 @@ class Response:
 #      but when making the request, request 'gemini://gemini.circumlunar.space/'
 class Connection:
 
-    def __init__(self, URL, cert=None):
+    def __init__(self, host, query, cert=None):
         # make connection
         context = ssl.SSLContext()
-        self.host, self.query = self._parse_query(URL)
+        self.host = host
+        self.query = query
 
         try:
             netlog.debug("Attempting to connect to {}".format(self.host))
@@ -37,7 +38,7 @@ class Connection:
             netlog.debug("Invalid host, raising exception")
             raise InvalidHostError
 
-        self.sock = context.wrap_socket(connection)
+        self.sock = context.wrap_socket(connection, server_hostname=self.host)
         der_cert = self.sock.getpeercert(True)
         pem_cert = ssl.DER_cert_to_PEM_cert(der_cert)
 
@@ -46,23 +47,6 @@ class Connection:
             self.maybe_unsafe = True
         else:
             self.maybe_unsafe = False
-
-
-
-    def _parse_query(self, query):
-        GEM_LEN = 9
-        if "gemini://" not in query:
-            query = "gemini://" + query
-
-        page = query[GEM_LEN:].find("/")
-
-        if page == -1:
-            host = query[GEM_LEN:]
-            query = query + "/"
-        else:
-            host = query[GEM_LEN:page+GEM_LEN]
-
-        return (host, query)
 
 
 
