@@ -65,19 +65,33 @@ class Connection:
 
         ready = select.select([self.sock], [], [], 10)
         if ready[0]:
-            headers = self.sock.recv(PACKET_SIZE)
-            if len(headers) > 1024 + 5:
-                raise MetaOverflowError
-            body = b''
+
+	    # TODO: headers and response body are not necessarily split into two different streams
+            #       Accept the bare minimum # of bytes to get the MIME type, then check to see is
+            #       a type is present. If not, then the MIME must be a response explanation.
+            #       Try parsing based on b'\r\n' to get the end of the response headers.
+            #       Check the docs again to be sure
+
+            #headers = self.sock.recv(PACKET_SIZE)
+            #netlog.debug(headers)
+
+
+            #if len(headers) > 1024 + 5:
+                #raise MetaOverflowError
+
+            entirety = b''
             buf = b'ohnoo'
 
             while len(buf) != 0:
                 buf = self.sock.recv(PACKET_SIZE)
-                body += buf
+                entirety += buf
 
+            header_end = entirety.find(b'\r\n')
 
-            return Response(headers[0:2], headers[3:len(headers)-2], body)
+            if header_end > 1029:
+                raise MetaOverflowError
 
+            return Response(entirety[0:2], entirety[3:header_end], entirety[header_end+2:len(entirety)])
 
         netlog.debug("No answer received, ")
         self.close_connection()

@@ -177,10 +177,14 @@ class Client:
         return (doc_type, content, properties)
 
 
-    def _parse_query(self, query, relative = None):
+
+    # TODO: When being redirected, you should go with the query that is given to you
+    #       by the server without additional modifications to it.
+    def _parse_query(self, query, relative = None, redirect = False):
         GEM_LEN = 9
 
-        #TODO: Do this using .find("://") rather than harcoding it only to work with gemini://
+
+
 
         # Find the end of the protocol
         netlog.debug("Searching for '://' in {}".format(query))
@@ -199,6 +203,9 @@ class Client:
         protocol = query[0:protocol_end]
         core = [x for x in query[protocol_end:].split('/') if x != '']
         host = core[0]
+
+        if redirect:
+            return (host, query)
 
         netlog.debug("Protocol:{}\nCore:{}\nHost:{}".format(protocol, core, host))
         netlog.debug("Relative:{}".format(relative))
@@ -245,6 +252,9 @@ class Client:
                 else:
                     # must be a directory name, just append it
                     netlog.debug("{} is a directory name right?".format(element))
+                    if "." in core[-1] and len(core) > 1:
+                        core.pop()
+                        idx -= 1
                     core.append(element)
                     idx += 1
 
@@ -267,11 +277,11 @@ class Client:
         return (host, query)
 
 
-    def get_page(self, URL, relative=None,cert=None):
+    def get_page(self, URL, relative=None, redirected = False, cert=None):
         if URL == "start://":
             return self.get_start_page()
 
-        host, query = self._parse_query(URL, relative)
+        host, query = self._parse_query(URL, relative, redirect=redirected)
         netlog.debug("Host: {}\n\tURL: {}".format(host, query))
         try:
             page_conn = Connection(host, query)
@@ -287,25 +297,34 @@ class Client:
         #print("Receiving response")
         try:
             response = page_conn.receive_response()
-        except MetaOverflorError:
+        except MetaOverflowError:
             page_conn.close_connection()
             return self._make_placeholder(server_error_page)
 
         page_conn.close_connection()
 
-        netlog.debug("response from {}: {}".format(URL, response))
+        #netlog.debug("response from {}: {}".format(URL, response))
         netlog.debug("Response code type: {}x".format(response.code[0:1]))
 
         if response.code[0:1] == b'2':
 
             parsed_mime = self._parse_response(response.MIME, response.body)
-            netlog.debug("Parsed MIME: {}".format(parsed_mime))
+            #netlog.debug("Parsed MIME: {}".format(parsed_mime))
             netlog.debug("query to return: {}".format(query))
             return (DisplayForm(parsed_mime[0], parsed_mime[1],
                                 parsed_mime[2]),
                     query)
+        elif response.code[0:1] == b'3':
+            return self.get_page(response.MIME.decode("utf-8"), redirected=True)
+
         elif response.code[0:1] == b'4':
-            return self._make_placeholder(status_4x_perm_fail)
+            # Test for this error with gemini://idiomdrottning.org/texts.gmi
+            netlog.debug(response)
+            MIME = response.MIME.decode("utf-8")
+            code = response.code.decode("utf-8")
+            page = status_4x_temp_fail.decode("utf-8").format(code, MIME)
+            return self._make_placeholder(page.encode("utf-8"))
+
         elif response.code[0:1] == b'5':
             return self._make_placeholder(status_5x_perm_fail)
         else:
