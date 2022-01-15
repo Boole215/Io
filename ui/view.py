@@ -34,7 +34,7 @@ from networking.client import DisplayForm
 
 app_client = Client()
 
-#Put LagannApp here, and make separate files for each widget
+# Put LagannApp here, and make separate files for each widget
 # have two views, one will be the gemini page and the other will
 # be the searchbar, when the user presses 's' the serachbar will come out
 # if they click away from the searchbar, it goes away.
